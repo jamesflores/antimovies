@@ -1,0 +1,86 @@
+<!-- templates/index.html -->
+{% extends "base.html" %}
+{% block content %}
+<div class="content-wrapper {% if is_recommendation %}anti-match-theme{% endif %}">
+    <div class="container-fluid py-5">
+        <div class="text-center mb-5">
+            {% if is_recommendation %}
+                <div class="taste-analysis-container mb-4">
+                    <div class="analysis-card">
+                        <h3 class="text-danger mb-3">Your Movie Taste Analysis</h3>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="analysis-section">
+                                    <h4>What You Love</h4>
+                                    <p>{{ taste_analysis.taste_profile }}</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="analysis-section">
+                                    <h4>Your Anti-Matches</h4>
+                                    <p>{{ taste_analysis.anti_preferences }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <h1 class="display-4 text-danger">Welcome to Your Movie Nightmare</h1>
+                <p class="lead text-danger">Prepare yourself for cinema that defies your every preference...</p>
+            {% else %}
+                <h1 class="display-4">Movie Anti-Matcher</h1>
+                <p class="lead">Select movies you love to find ones you'd hate!</p>
+            {% endif %}
+        </div>
+
+        <div class="row" id="poster-container">
+            {% include 'poster_grid.html' %}
+        </div>
+
+        <!-- Hidden load more button triggered by intersection observer -->
+        <button id="load-more-trigger"
+                class="d-none"
+                hx-get="/load-more-posters"
+                hx-target="#poster-container"
+                hx-swap="beforeend">
+        </button>
+
+        <!-- Sentinel element for infinite scroll -->
+        <div id="scroll-sentinel" class="text-center my-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Fixed footer with actions -->
+<div class="footer-actions">
+    <div class="container-fluid">
+        <div class="d-flex justify-content-center align-items-center gap-3">
+            <div class="selection-badge" id="selection-status">
+                <span class="badge bg-primary">0 movies selected</span>
+            </div>
+            
+            <!-- Anti-Movies Button -->
+            <button class="btn btn-danger"
+                id="find-recommendations"
+                hx-post="/get-recommendations"
+                hx-target="#poster-container"
+                hx-swap="innerHTML"
+                hx-include="[name='selected-movies']"
+                hx-headers='{"Content-Type": "application/x-www-form-urlencoded"}'
+                disabled>
+                Find My Anti-Movies!
+            </button>
+            
+            <!-- Restart Button (initially hidden) -->
+            <button class="btn btn-secondary d-none"
+                    id="restart-app"
+                    onclick="restartApp()">
+                Start New Session
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
