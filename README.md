@@ -41,15 +41,19 @@ Example:
 - get_contrasting_movies: returns movie recommendations by flipping the user’s preferences. Returns a broader selection of low-rated movies if none are found
 - analyze_preferences and analyze_taste: OpenAI wrappers to analyze user-selected movies and generate JSON objects that contain anti-preferences, defining genres, years, and ratings for undesirable movies
 
-3.	Templates
+3.  config.py:
+- Handles setting and configuration of environment variables
+- Note: set SECRET_KEY (optional), TMDB_API_KEY and OPENAI_API_KEY in your environment (.env file works locally)
+
+4.	Templates
 - poster_grid.html: renders the Bootsrap grid of movies, displaying movie posters and an overlay of basic information
 - base.html: contains shared layout components, primarily for the footer
 - index.html: the main page that houses all the components for this single page app
 
-4.	static/css/custom.css
+5.	static/css/custom.css
 - Custom CSS file. Includes themes for standard and anti-match modes, so the user knows when they are selecting movies to like and browsing anti-movies.
 
-5.	static/js/movie.js
+6.	static/js/movie.js
 - Dynamic functionality to handle the “Find My Anti-Movies” button
 - Allow infinite scrolling to load more movie posters
 - Manages selection states and overlay when processing
