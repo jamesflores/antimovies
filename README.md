@@ -1,6 +1,7 @@
 # Movie Anti-Matcher
 
 Demo: https://movies.jamesf.xyz
+
 Video: https://youtu.be/5jbmsSQj9jw
 
 Movie Anti-Matcher is a Flask web application that allows users to discover movies they’d likely dislike based on movies they select as "liking". The app uses OpenAI gpt-4o-mini to provide taste analysis and preferences.
@@ -42,8 +43,8 @@ Example:
 
 3.	Templates
 - poster_grid.html: renders the Bootsrap grid of movies, displaying movie posters and an overlay of basic information
-- index.html: 
 - base.html: contains shared layout components, primarily for the footer
+- index.html: the main page that houses all the components for this single page app
 
 4.	static/css/custom.css
 - Custom CSS file. Includes themes for standard and anti-match modes, so the user knows when they are selecting movies to like and browsing anti-movies.
