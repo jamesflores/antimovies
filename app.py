@@ -1,6 +1,6 @@
 import logging
 from flask import Flask, render_template, jsonify, request, session
-from movie_service import get_random_posters, get_worst_rated_movies, analyze_preferences, analyze_taste
+from movie_service import get_random_posters, get_contrasting_movies, analyze_preferences, analyze_taste
 from config import SECRET_KEY
 import math
 
@@ -60,12 +60,12 @@ def get_recommendations():
         session['taste_analysis'] = taste_analysis
         
         # Attempt to get AI-based recommendations
-        anti_recommendations = get_worst_rated_movies(count=movies_needed, anti_preferences=anti_preferences)
+        anti_recommendations = get_contrasting_movies(count=movies_needed, anti_preferences=anti_preferences)
 
         # Fallback to generic low-rated movies if no AI-based recommendations are found
         if not anti_recommendations:
             logger.warning("No AI-based recommendations found, using generic low-rated movies.")
-            anti_recommendations = get_worst_rated_movies(count=movies_needed)
+            anti_recommendations = get_contrasting_movies(count=movies_needed)
 
         return render_template('poster_grid.html', 
                                posters=anti_recommendations,
@@ -80,7 +80,7 @@ def load_more_anti_recommendations():
     movies_needed = calculate_movies_needed()
     anti_preferences = session.get('anti_preferences')
     
-    posters = get_worst_rated_movies(
+    posters = get_contrasting_movies(
         count=movies_needed,
         anti_preferences=anti_preferences
     )

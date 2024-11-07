@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
 TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"  # w500 for good quality posters
 
+# Define acceptable certifications
+ACCEPTABLE_CERTIFICATIONS = {'G', 'PG', 'PG-13'}
+
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 def get_tmdb_headers():
@@ -23,15 +26,21 @@ def get_tmdb_headers():
 
 def get_random_posters(count=10):
     try:
-        random_page = random.randint(1, 20)  # Limiting to first 20 pages for better quality
-        url = f"{TMDB_BASE_URL}/movie/popular"
+        random_page = random.randint(1, 20)
+        url = f"{TMDB_BASE_URL}/discover/movie"
+        
+        # Use certification filter to get only G, PG, and PG-13 movies
         params = {
             'page': random_page,
             'language': 'en-US',
-            'include_adult': False
+            'certification_country': 'US',
+            'certification': 'G|PG|PG-13',  # Explicitly list allowed certifications
+            'vote_count.gte': 100,
+            'with_original_language': 'en',  # Add language filter to increase likelihood of US ratings
+            'sort_by': 'popularity.desc'
         }
         
-        logger.info(f"Making request to: {url}")
+        logger.info(f"Making request to: {url} with certifications G, PG, PG-13")
         response = requests.get(url, headers=get_tmdb_headers(), params=params, timeout=10)
         response.raise_for_status()
         movies_data = response.json().get('results', [])
@@ -40,13 +49,13 @@ def get_random_posters(count=10):
         random.shuffle(movies_data)
         movies_data = movies_data[:count]
         
-        # Gather valid posters only
+        # Gather valid posters
         posters = [
             {
                 'id': movie['id'],
                 'title': movie.get('title', 'Unknown Title'),
                 'poster_url': f"{TMDB_IMAGE_BASE_URL}{movie['poster_path']}",
-                'year': movie.get('release_date', '')[:4],
+                'year': movie.get('release_date', '')[:4] if movie.get('release_date') else 'Unknown',
                 'genre_ids': movie.get('genre_ids', []),
                 'summary': movie.get('overview', 'No summary available'),
                 'vote_average': movie.get('vote_average', 0)
@@ -62,57 +71,9 @@ def get_random_posters(count=10):
     except Exception as e:
         logger.error(f"Error fetching posters: {str(e)}")
         raise
-
-def get_worst_rated_movies(count=10, anti_preferences=None):
-    try:
-        url = f"{TMDB_BASE_URL}/discover/movie"
-        params = {
-            'language': 'en-US',
-            'include_adult': False,
-            'page': random.randint(1, 5),
-            'vote_count.gte': 50
-        }
-
-        if anti_preferences:
-            genres_to_use = random.sample(anti_preferences['genres_to_include'], min(2, len(anti_preferences['genres_to_include'])))
-            params.update({
-                'with_genres': '|'.join(map(str, genres_to_use)),
-                'primary_release_date.gte': f"{anti_preferences['min_year']}-01-01",
-                'primary_release_date.lte': f"{anti_preferences['max_year']}-12-31",
-                'vote_average.lte': min(5.0, anti_preferences.get('vote_average_lte', 5.0)),
-                'sort_by': anti_preferences.get('sort_preference', 'vote_average.asc')
-            })
-
-        logger.info(f"Fetching worst rated movies with params: {params}")
-        response = requests.get(url, headers=get_tmdb_headers(), params=params, timeout=10)
-        response.raise_for_status()
-        movies_data = response.json().get('results', [])
         
-        # Shuffle and limit to requested count
-        random.shuffle(movies_data)
-        movies_data = movies_data[:count]
-        
-        # Gather valid posters only
-        posters = [
-            {
-                'id': movie['id'],
-                'title': movie.get('title', 'Unknown Title'),
-                'poster_url': f"{TMDB_IMAGE_BASE_URL}{movie['poster_path']}",
-                'year': movie.get('release_date', '')[:4],
-                'genre_ids': movie.get('genre_ids', []),
-                'summary': movie.get('overview', 'No summary available'),
-                'vote_average': movie.get('vote_average', 0)
-            }
-            for movie in movies_data if movie.get('poster_path')
-        ]
-        
-        if not posters:
-            raise ValueError("No valid posters found for the worst-rated movies request")
-        
-        return posters
-
     except Exception as e:
-        logger.error(f"Error fetching worst rated movies: {str(e)}")
+        logger.error(f"Error fetching posters: {str(e)}")
         raise
 
 def get_movie_details(movie_ids):
@@ -159,6 +120,8 @@ Create a JSON object with:
 4. vote_average_lte: maximum rating to consider (0-10)
 5. sort_preference: either "vote_average.asc" or "popularity.asc"
 
+Note: Do not include any comments in the JSON.
+
 Use these TMDB genre IDs:
 Action: 28
 Adventure: 12
@@ -180,102 +143,107 @@ Thriller: 53
 War: 10752
 Western: 37
 
-Return only the JSON object, no explanation."""
+Return only the JSON object, no explanation or comments."""
 
-        # Send request to OpenAI API
         truncated_prompt = _truncate_text(prompt)
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a movie expert who specializes in finding contrasting movie recommendations and responds in JSON format."},
+                {"role": "system", "content": "You are a movie expert who specializes in finding contrasting movie recommendations. Return only valid JSON without comments."},
                 {"role": "user", "content": truncated_prompt}
-            ]
+            ],
+            response_format={ "type": "json_object" }
         )
 
-        # Log raw response for debugging
-        logger.info(f"Raw OpenAI response: {response}")
-
         # Extract JSON content from response
-        response_content = response.choices[0].message.content
-        json_match = re.search(r'```json\n(.*?)\n```', response_content, re.DOTALL)
-
-        if json_match:
-            # Parse the JSON content extracted from code block
-            anti_preferences = json.loads(json_match.group(1))
-            logger.info(f"Generated anti-preferences: {json.dumps(anti_preferences, indent=2)}")
-            return anti_preferences
-        else:
-            logger.error("OpenAI response did not contain valid JSON in code block format.")
-            raise ValueError("No valid JSON found in OpenAI response.")
+        anti_preferences = json.loads(response.choices[0].message.content)
+        logger.info(f"Generated anti-preferences: {json.dumps(anti_preferences, indent=2)}")
+        return anti_preferences
 
     except Exception as e:
         logger.error(f"Error analyzing preferences: {str(e)}")
+        # Return a fallback that focuses on getting poorly rated movies
         return {
-            "genres_to_include": [35, 27],  # Comedy and Horror as defaults
+            "genres_to_include": [],  # No genre restrictions in fallback
             "min_year": "1900",
             "max_year": "2024",
-            "vote_average_lte": 5.0,
+            "vote_average_lte": 4.0,
             "sort_preference": "vote_average.asc",
-            "keywords": ["low budget", "bad acting", "poor special effects"]
+            "keywords": ["poorly executed", "bad production", "low quality"]
         }
-
-def get_worst_rated_movies(count=10, anti_preferences=None):
-    """Get movies based on AI-generated anti-preferences, with a fallback to generic low-rated movies if needed."""
+    
+def get_contrasting_movies(count=10, anti_preferences=None):
+    """Get contrasting movies or worst-rated movies as fallback"""
     try:
         url = f"{TMDB_BASE_URL}/discover/movie"
         
-        # Base parameters for the initial request using anti-preferences
-        params = {
+        # Base parameters that stay constant
+        base_params = {
             'language': 'en-US',
-            'include_adult': False,
-            'page': random.randint(1, 5),
-            'vote_count.gte': 50  # Ensures a minimum number of votes
+            'certification_country': 'US',
+            'certification': 'G|PG|PG-13',
+            'with_original_language': 'en',
+            'vote_count.gte': 100,
+            'page': random.randint(1, 5)
         }
 
-        # Apply anti-preferences if available
-        if anti_preferences:
-            genres_to_use = random.sample(anti_preferences['genres_to_include'], min(2, len(anti_preferences['genres_to_include'])))
+        if anti_preferences and anti_preferences.get('genres_to_include'):
+            # If we have valid anti-preferences with genres, use contrasting approach
+            params = base_params.copy()
+            genres_to_use = random.sample(anti_preferences['genres_to_include'], 
+                                        min(2, len(anti_preferences['genres_to_include'])))
             params.update({
                 'with_genres': '|'.join(map(str, genres_to_use)),
                 'primary_release_date.gte': f"{anti_preferences['min_year']}-01-01",
                 'primary_release_date.lte': f"{anti_preferences['max_year']}-12-31",
-                'vote_average.lte': min(5.0, anti_preferences.get('vote_average_lte', 5.0)),
-                'sort_by': anti_preferences.get('sort_preference', 'vote_average.asc')
+                'sort_by': 'popularity.desc'
             })
-
-        # Attempt initial request with anti-preferences
-        logger.info(f"Fetching worst-rated movies with params: {params}")
-        
+            
+            logger.info(f"Fetching contrasting movies with genres: {genres_to_use}")
+            
+        else:
+            # Fallback: Get poorly rated movies
+            params = base_params.copy()
+            params.update({
+                'vote_average.lte': 5.0,
+                'sort_by': 'vote_average.asc',
+                'vote_count.gte': 200  # Increase minimum votes for better confidence in low ratings
+            })
+            
+            logger.info("Falling back to worst-rated movies")
+            
         response = requests.get(url, headers=get_tmdb_headers(), params=params, timeout=10)
         response.raise_for_status()
         movies_data = response.json().get('results', [])
 
-        # Check if we got results, otherwise switch to fallback
         if not movies_data:
-            logger.warning("No valid results found for anti-preferences. Using fallback parameters for low-rated movies.")
-            params = {
-                'language': 'en-US',
-                'include_adult': False,
-                'vote_count.gte': 50,
-                'vote_average.lte': 3.5,   # Target very low-rated movies
+            # Additional fallback if no results
+            params = base_params.copy()
+            params.update({
+                'vote_average.lte': 6.0,
                 'sort_by': 'vote_average.asc',
-                'page': random.randint(1, 5)
-            }
+                'vote_count.gte': 100
+            })
+            
+            logger.info("Using secondary fallback with broader criteria")
             response = requests.get(url, headers=get_tmdb_headers(), params=params, timeout=10)
             response.raise_for_status()
             movies_data = response.json().get('results', [])
+
+        if not movies_data:
+            raise ValueError("No contrasting movies found")
 
         # Shuffle and limit to requested count
         random.shuffle(movies_data)
         movies_data = movies_data[:count]
 
-        # Gather valid posters only
+        # Format the results
         posters = [
             {
                 'id': movie['id'],
                 'title': movie.get('title', 'Unknown Title'),
                 'poster_url': f"{TMDB_IMAGE_BASE_URL}{movie['poster_path']}",
-                'year': movie.get('release_date', '')[:4],
+                'year': movie.get('release_date', '')[:4] if movie.get('release_date') else 'Unknown',
                 'genre_ids': movie.get('genre_ids', []),
                 'summary': movie.get('overview', 'No summary available'),
                 'vote_average': movie.get('vote_average', 0)
@@ -283,13 +251,12 @@ def get_worst_rated_movies(count=10, anti_preferences=None):
             for movie in movies_data if movie.get('poster_path')
         ]
 
-        logger.info(f"Final number of posters with valid images: {len(posters)}")
-        
+        logger.info(f"Successfully found {len(posters)} movies with average rating: {sum(m.get('vote_average', 0) for m in movies_data) / len(movies_data):.1f}")
         return posters
         
     except Exception as e:
-        logger.error(f"Error fetching worst rated movies: {str(e)}")
-        return []  # Return an empty list in case of error
+        logger.error(f"Error fetching contrasting movies: {str(e)}")
+        return []
 
 def analyze_taste(selected_movies):
     """Analyze user's taste and generate description of what they'd hate"""
