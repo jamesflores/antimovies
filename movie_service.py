@@ -2,7 +2,7 @@
 import json
 import re
 import requests
-from config import TMDB_API_KEY, OPENAI_API_KEY
+from config import TMDB_API_KEY, OPENAI_API_KEY, AI_GATEWAY_ENDPOINT
 import logging
 import random
 from openai import OpenAI
@@ -16,7 +16,14 @@ TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"  # w500 for good quality
 # Define acceptable certifications
 ACCEPTABLE_CERTIFICATIONS = {'G', 'PG', 'PG-13'}
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+client_config = {
+    'api_key': OPENAI_API_KEY
+}
+
+if AI_GATEWAY_ENDPOINT is not None:
+    client_config['base_url'] = AI_GATEWAY_ENDPOINT  # Use custom AI Gateway endpoint (Cloudflare)
+
+client = OpenAI(**client_config)
 
 def get_tmdb_headers():
     return {

@@ -16,6 +16,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'any-secret-key')
 # API Keys
 TMDB_API_KEY = os.getenv('TMDB_API_KEY')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+AI_GATEWAY_ENDPOINT = os.getenv('AI_GATEWAY_ENDPOINT', None)
 
 def verify_tmdb_api_key():
     """Verify TMDB API key is working"""
